@@ -1,0 +1,147 @@
+# libvmi介绍
+
+libvmi提供了大量的库函数用于开发基于VMI的安全软件。
+
+## libvmi的接口
+
+0. VMI构造和析构
+1. VM基本信息获取
+2. VM地址转换、pid页表转换
+3. VM读写内存
+4. VMIcache操作函数
+5. 事件注册通知
+
+### VMI构造和析构
+
+接口包括下面这些
+
+```
+vmi_init
+vmi_init_custom
+vmi_init_complete
+vmi_init_complete_custom
+vmi_init_paging
+vmi_destroy
+```
+
+带有custom表示从内存结构中读取配置，否则从文件中读取配置。
+complete用在vmi_init中以partial方式初始化后（这种状态下只提供物理地址读写），经过启发式方法确定了特别偏移量后，进行完全初始化，这样才能够用其他方式比如符号、虚拟地址读写。
+
+### VM基本信息获取
+
+```
+vmi_get_name ->driver_get_name
+vmi_get_vmid ->driver_get_id
+vmi_get_access_mode //xen kvm file
+vmi_get_page_mode
+vmi_get_address_width
+vmi_get_ostype
+vmi_get_winver
+vmi_get_winver_str
+vmi_get_winver_manual
+vmi_get_offset
+vmi_get_memsize
+```
+windows能够设置和得到的符号包括如下表
+
+|符号名字|意义|
+|--------|----|
+|win_ntoskrnl||
+|win_tasks||
+|win_pdbase||
+|win_pid||
+|win_pname||
+|win_kdvb||
+|win_sysproc||
+|win_kpcr||
+|win_kdbg||
+|ostype<br>os_type||
+|sysmap||
+|name||
+|domid||
+
+### VM地址转换、pid页表转换
+
+```
+vmi_translate_kv2p
+vmi_translate_uv2p
+vmi_translate_ksym2v
+vmi_translate_sym2v  //遍历PE导出表
+vmi_translate_v2sym
+vmi_pid_to_dtb
+vmi_dtb_to_pid
+vmi_pagetable_lookup //虚拟地址转化为物理地址
+vmi_pagetable_lookup_extended
+```
+
+### VM读写内存
+
+```
+vmi_read(write)
+vmi_read(write)_a_b //a=[8,16,32,64,addr,str],b=[pa,va,ksym]
+vmi_read_unicode_str_va
+vmi_convert_str_encoding
+vmi_print_hex_a //a=[pa,va,ksym]
+```
+
+### VMIcache操作函数
+
+v2pcache表示内部虚拟地址到物理地址转换
+
+symcache 符号到虚拟地址转换
+
+rvacache rva到符号的转换
+
+pidcache pid到dtb的转换
+
+```
+vmi_a_add //a=[v2pcache,symcache,rvacache,pidcache]
+vmi_a_flush //a=[v2pcache,symcache,rvacache,pidcache]
+```
+
+### 事件注册通知
+
+```
+static inline status_t
+driver_xen_setup(vmi_instance_t vmi)
+{
+    driver_interface_t driver = { 0 };
+    driver.initialized = true;
+    driver.init_ptr = &xen_init;
+    driver.init_vmi_ptr = &xen_init_vmi;
+    driver.destroy_ptr = &xen_destroy;
+    driver.get_id_from_name_ptr = &xen_get_domainid_from_name;
+    driver.get_name_from_id_ptr = &xen_get_name_from_domainid;
+    driver.get_id_ptr = &xen_get_domainid;
+    driver.set_id_ptr = &xen_set_domainid;
+    driver.check_id_ptr = &xen_check_domainid;
+    driver.get_name_ptr = &xen_get_domainname;
+    driver.set_name_ptr = &xen_set_domainname;
+    driver.get_memsize_ptr = &xen_get_memsize;
+    driver.get_vcpureg_ptr = &xen_get_vcpureg;
+    driver.set_vcpureg_ptr = &xen_set_vcpureg;
+    driver.get_address_width_ptr = &xen_get_address_width;
+    driver.read_page_ptr = &xen_read_page;
+    driver.write_ptr = &xen_write;
+    driver.is_pv_ptr = &xen_is_pv;
+    driver.pause_vm_ptr = &xen_pause_vm;
+    driver.resume_vm_ptr = &xen_resume_vm;
+#if ENABLE_SHM_SNAPSHOT == 1
+    driver.create_shm_snapshot_ptr = &xen_create_shm_snapshot;
+    driver.destroy_shm_snapshot_ptr = &xen_destroy_shm_snapshot;
+    driver.get_dgpma_ptr = &xen_get_dgpma;
+#endif
+#if ENABLE_XEN_EVENTS == 1
+    driver.events_listen_ptr = &xen_events_listen;
+    driver.are_events_pending_ptr = &xen_are_events_pending;
+    driver.set_reg_access_ptr = &xen_set_reg_access;
+    driver.set_intr_access_ptr = &xen_set_intr_access;
+    driver.set_mem_access_ptr = &xen_set_mem_access;
+    driver.start_single_step_ptr = &xen_start_single_step;
+    driver.stop_single_step_ptr = &xen_stop_single_step;
+    driver.shutdown_single_step_ptr = &xen_shutdown_single_step;
+#endif
+    vmi->driver = driver;
+    return VMI_SUCCESS;
+}
+```

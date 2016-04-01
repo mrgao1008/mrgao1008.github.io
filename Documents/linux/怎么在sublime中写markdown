@@ -1,0 +1,67 @@
+# 怎么在Sublime中写Markdown
+Tags:sublime markdown
+
+## Sublime安装
+
+Sublime2官网:[http://www.sublimetext.com/2](http://www.sublimetext.com/2)
+
+Sublime3官网:[http://www.sublimetext.com/3](http://www.sublimetext.com/3)
+
+## 安装Markdown Preview
+**sublime2（`未验证`）**
+打开Ctrl+~,输入如下代码：
+```
+import urllib2,os; pf='Package Control.sublime-package'; ipp = sublime.installed_packages_path(); os.makedirs( ipp ) if not os.path.exists(ipp) else None; urllib2.install_opener( urllib2.build_opener( urllib2.ProxyHandler( ))); open( os.path.join( ipp, pf), 'wb' ).write( urllib2.urlopen( 'http://sublime.wbond.net/' +pf.replace( ' ','%20' )).read()); print( 'Please restart Sublime Text to finish installation')
+```
+**sublime3（`未验证`)**
+打开Ctrl+~,输入如下代码
+```
+import urllib.request,os; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); open(os.path.join(ipp, pf), 'wb').write(urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ','%20')).read())
+```
+1. Ctrl+Shift+p 打开Package Control 输入install,选择 install package
+
+![install_package](https://raw.githubusercontent.com/mrgao1008/picture/master/sublime_install_package.png)
+
+-. 输入markdown 选择preview安装
+
+![markdown_preview](https://raw.githubusercontent.com/mrgao1008/picture/master/markdown_preview.png)
+
+## Markdown基本语法
+
+### 标题
+通过在句首加入#，表示标题
+# 标题1
+## 标题2
+...
+###### 标题6
+
+### 代码
+用```包围的表示代码
+```
+int main()
+{
+	printf("hello world\n");
+}
+```
+
+### 图片
+为了使的图片在互联网上能够访问，需要将图片上传到网盘上，比如github.
+```
+![name](url)来表示图片
+```
+
+### 链接
+链接和图片类似
+```
+[name](url)
+```
+
+### 加粗和斜体
+**加粗**
+```
+**加粗**
+```
+*斜体*
+```
+*斜体*
+```

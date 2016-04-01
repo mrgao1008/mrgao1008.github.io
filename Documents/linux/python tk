@@ -1,0 +1,100 @@
+# tk 编程
+## 标准属性
+
+### dimensions
+尺寸包含4种
+
+| 字母 | 含义 |
+|--|--|
+|c|厘米|
+|i|英寸|
+|m|毫米|
+|p|打印机的点？？|
+
+### 坐标
+
+### 颜色
+
+||#rgb||four bits per color||
+||#rrggbb||eight bits per color||
+||#rrrgggbbb||twelve bits per color||
+
+还一可以指定关键词'white','black','red','green','blue','cyan','yellow','magenta'
+
+### fonts
+
+1.元组表示,第一表示字体，第二个表示大小，正数为points，负数为像素点，后续为其他一些特别设置
+('Helvetica','16')
+('Times','24','bold italic')
+('Times',-20,'bold')
+
+2.字体对象 tkFont
+
+3.X font names.
+
+### 锚
+N S W E CENTER
+NW NE SW SE
+
+### 释放样式
+
+FLAT RAISED SUNKEN GROOVE RIDGE
+
+### Bitmaps
+
+button支持 error gray75 gray50 gray25 gray12 hourglass info questhead question warning
+
+也可以使用.xbm(X bit map)使用@path
+
+### cursors
+
+### images
+
+BitmapImage 支持 .xbm
+PhotoImage 支持 .gif .pgm .ppm
+ImageTk 支持更多格式
+
+#### the BitmapImage class
+原型
+```python
+tk.BitmapImage(file=f[, background=b][, foreground=c])
+```
+实例
+```python
+logo = tk.BitmapImage('logo.xbm', foreground='red')
+Label(image=logo).grid()
+```
+#### the PhotoImage class
+原型
+```python
+tk.PhotoImage(file=f)
+```
+### Geometry strings
+
+A geometry string is a standard way of describing the size and location of a top-level window on a desktop.
+format: 'wxh±x±y'
++x left side
+-x right side
++y top
+-y bottom
+
+### window names
+hierarchical window path name
+root window '.'
+child name '.n'
+child windows of child 'p.n', p is the name of the parent window
+
+str(w): to get the path name of a widget w
+
+### cap and join styles
+
+cap style: tk.BUTT, tk.PROJECTING, tk.ROUND
+join style: tk.ROUND, tk.BEVEL, tk.MITER
+
+### dash patterns
+
+dash=(3,5)
+dash=(7,1,1,1)
+dash=(5,1,2,1),dashoff=3
+
+## tk.TclError

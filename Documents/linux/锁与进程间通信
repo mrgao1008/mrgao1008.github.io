@@ -1,0 +1,181 @@
+# 锁与进程间通信
+
+## 概念
+
+**竞态条件(race condition)**是几个进程在访问资源时彼此干扰的情况。
+
+难点在于：无法通过测试完全找到竞态条件，只有彻底研究源代码并通过敏锐的直觉，才能找到并消除竞态条件。
+
+**临界区(Critical section)**
+是在并行编程中，一段不能被多个处理器同时执行的代码。
+
+解决方法：
+
+信号量(semaphore):受保护的特殊变量。初始值为1。有2个标准操作up和down。在一个进程试图进入临界区时，调用down函数。这会将信号量减1，即将其设置为0，然后执行临界区代码。在执行操作完成后，调用up函数将信号量加1，即重置为初始值。信号量有下面2中特性：
+
+（1）又一个进程试图进入临界区，首先必须对信号量执行down操作。因为信号量当前值为0，会导致进程在该信号量上“睡眠”，直到前一个进程退出。
+
+（2）进程退出临界区，执行up操作。不仅将信号量加1，而且还会选择一个在该信号量上睡眠的进程。
+
+**查询和修改信号量的操作比如为原子的，反正竞态条件。**
+
+各种锁：
+
++ 原子操作:保证简单的计数器加1可以原子执行
++ 自旋锁:用于短期保护某段代码，以防止其他处理器访问
++ 信号量：在等待信号量释放时，进入睡眠，直至被唤醒，内核重新尝试获取信号量
++ 读写锁：区分对数据结构的两种不同类型的操作。任何数目的处理器都可以对数据结构进行并发**读**,但是只有一个处理器能进行**写**操作。
+
+## 原子操作
+原子类型为`atomic_t`，定义在`<asm-arch/atomic.h>`中。原子类型只能借助`ATOMIC_INIT`宏初始化。原子类型是基于c语言通用类型实现，不能用++等操作。
+
+|   操作   |效果|
+|----------|----|
+|atomic_read(atomic_t *v)|读取原子变量的值|
+|atomic_set(atomic_t *v, int i)|将v设置为i|
+|atomic_add(int i, atomic_t *v)|将i加到v|
+|atomic_add_return(int i, atomic_t *v)|将i加到v，并返回结果|
+|atomic_sub(int i, atomic_t *v)|从v减去i|
+|atomic_sub_return(int i, atomic_t *v)|从v减去i，并返回结果|
+|atomic_inc(atomic_t *v)|将v加1|
+|atomic_inc_and_test(atomic_t *v)|将v加1。结果如果为0则返回true，否则返回false|
+|atomic_dec(atomic_t *v)|从v减1|
+|atomic_dec_and_test(atomic_t *v)|从v减1。结果如果为0则返回true，否则返回false|
+|atomic_add_negative(int i, atomic_i *v)|将i加到v.如果结果小于0则返回true,否则返回false|
+
+local_t类型，允许在单个CPU上原子操作。
+
+## 自旋锁
+
+自旋锁用于保护段的代码段，其中只包含少量c语言，因此会很快执行完毕。
+
+自旋锁通过spinlock_t数据结构实现，基本可以使用spin_lock和spin_unlock操作。还有其他一些自旋锁操作：spin_lock_irqsave不仅获得自旋锁，还停用本地cpu的中断，而sin_lock_bh则停用softIRQ。这两个操作获得的自旋锁必须用对应的接口释放，分别是spin_unlock_irqsave和spin_unlock_bh。
+
+## 信号量
+
+```
+<asm-arch/semaphore.h>
+struct semaphor {
+	atomic_t count;
+	int sleepers;
+	wait_queue_head_t wait;
+}
+```
+与自旋锁相比，信号量适合于保护更长的临界区，以防止并行访问。但它们不应该用于保护较短的代码范围，因为竞争信号量时需要使进程睡眠和再次唤醒，代价很高。
+
+## RCU机制
+
+RCU(read-copy-update)是一个相当新的同步机制。RCU对使用者提出一些约束
++ 对共享资源的访问在大部分时间应该是只读的，写访问应该相对很少。
++ 在RCU保护的代码范围内，内核不能进入睡眠状态。
++ 受保护资源必须通过指针访问。
+
+RCU原理很简单:该机制记录了指向共享数据结构的指针的所有使用者。在该结构将要改变时，则首先创建一个副本（或一个新的实例，填充适当的内容，这没什么差别），在副本中修改。在所有进行读访问的使用者结束对旧副本的读取之后，指针可以替换为指向新的、修改后副本的指针。请注意，这种机制允许读写并发执行。
+
+### 核心API
+
+假定指针ptr指向一个被RCU保护的数据结构。直接反引用指针是禁止的，首先必须调用rcu_dereference(ptr)，然后反引用返回的结果。此外，凡引用指针并使用其结果的代码，需要用rcu_read_lock和rcu_read_unlock调用保护起来：
+
+```
+rcu_read_lock();
+
+p = rcu_derefence(ptr);
+if (p != NULL) {
+	awesome_function(p);
+}
+
+rcu_read_unlock();
+```
+
+**被反映用的指针不能在rcu_read_lock和rcu_read_unlock保护代码范围之外使用，也不能用于写访问**
+
+如果必须修改ptr指向的对象，则需要使用rcu_assign_pointer:
+
+```
+struct super_duper *new_ptr = kmalloc(...);
+
+new_ptr->meaing = xyz;
+new_ptr->of = 42;
+new_ptr->life = 23;
+
+rcu_assign_pointer(ptr, new_ptr);
+```
+
+按RCU的术语，该操作公布了这个指针，后续的读取操作将看到新的结构，而不是原来的。
+**如果更新可能来自内核中许多地方，那么必须使用普通的同步源于防止并发的写操作，如自旋锁。尽管RCU能保护读访问不受写访问的干扰，但它不对写访问之间的相互干扰提供防护！**
+
+synchronize_rcu()等待所有现存的读访问完成。在函数返回之后，释放与原指针关联的内存是安全的。
+
+call_rcu可用于注册一个函数，在所有针对共享资源的读访问完成以后调用。这要求将一个rcu_read实例嵌入（不能通过指针）到RCU保护的数据结构：
+```
+struct super_duper {
+	struct rcu_head head;
+	int meaning, of, life;
+};
+```
+该回调函数可通过参数访问对象的rcu_head成员，进而使用container_of机制访问对象本身。
+```
+kernel/rcuupdate.c
+void fastcall call_rcu(struct rcu_head * head, void(*func)(struct rcu_head *rcu))
+```
+
+### 链表操作
+
+RCU能保护的，不仅仅是一般的指针。内核也提供了标准函数，使得能通过RCU机制保护双链表，这是RCU机制在内核内部最重要的应用。此外，由struct hlist_head和struct hlist_node组成的散列表也可以通过RCU保护。
+
+有关通过RCU保护的链表，好消息是仍然可以使用标准的链表元素。只有在遍历链表、修改和删除链表元素时，必须调用标准函数的RCU变体。函数名称是在标准函数之后附加_rcu后缀。
+```
+<list.h>
+static inline void list_add_rcu(struct list_head *new,struct list_head *head)
+static inline void list_add_tail_rcu(struct list_head *new,struct list_head *head)
+static inline void list_del_rcu(struct list_head *entry)
+static inline void list_replace_rcu(struct list_head *old,struct list_head *new)
+```
+还有list_for_each_rcu允许遍历链表的所有元素。而list_for_each_rcu_safe甚至对删除链表元素也是安全的。这两个操作都必须通过一对rcu_read_lock()和rcu_read_unlock()包围。
+
+## 内存和优化屏障
+
+## 读/写锁
+
+读写信号量和读写自旋锁。
+
+读写自旋锁定义为rwlock_t。必须根据读写访问，以不同的方法获取锁。
+
+进程对临界区进行读访问时，在进入和离开是需要分别执行read_lock和read_unlock。内核允许任意数目的读进程并发访问临界区。
+
+write_lock和write_unlock用于写访问。内核保证只有一个写进程（此时没有读进程）能够处于临界区。
+
+_irq_irqsave变体也同样可用，运作方式如果普通的自旋锁。以_bh结果的变体也是可用的，用于停用软件中断，但硬件中断中断仍然是开启的。
+
+## 大内核锁
+
+## 互斥量
+
+尽管信号量可用于实现互斥量的功能，信号量的通用性导致的开销通常是不必要的。因此，内核包含了一个专用互斥量的独立实现，他们不依赖于信号量。**互斥量是信号量的特例，count为1时**
+
++ 经典的互斥量
+```
+<mutex.h>
+struct mutex {
+	/* 1: 未锁定， 0： 锁定， 负值： 锁定，可能有等待者*/
+	atomic_t count;
+	spinlock_t wait_lock;
+	struct list_head wait_list;
+};
+```
+
++ 实时互斥量
+```
+<rtmutex.h>
+struct rt_mutex {
+	spinlock_t wait_lock;
+	struct plist_head wait_list;
+	struct task_struct *owner;
+};
+```
+
+## 近似的per-CPU计数器
+
+对于某些计数器没必要时时了解其准确值。
+
+## 锁竞争与细粒度锁
